@@ -1,2 +1,3 @@
-# tidy-tuesdays-play
-playing with data provided by the Tidy Tuesday community
+# Tidy Tuesday practice
+
+Playing with data provided by the [Tidy Tuesday](https://github.com/rfordatascience/tidytuesday) community.
