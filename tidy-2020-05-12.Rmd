@@ -6,3 +6,187 @@ output: html_document
 ---
 
 # Volcano Eruptions Data
+
+```{r, message = F}
+# Loading in packages...
+
+library(plyr)
+library(skimr)
+library(tidyverse)
+
+# Loading in data...
+
+volcano <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-12/volcano.csv')
+eruptions <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-12/eruptions.csv')
+events <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-12/events.csv')
+tree_rings <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-12/tree_rings.csv')
+sulfur <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-12/sulfur.csv')
+
+```
+
+## Data Exploration
+
+```{r, eval = F}
+# Exploring "volcano"
+
+volcano
+skim(volcano)
+
+## I need to change 'primary_volcano_type' variable due to "(s)" problem in
+## strings, as I assume the plural vs. singular distinction isn't needed.
+
+as.data.frame(table(volcano$primary_volcano_type)) 
+
+## 'country' isn't an ideal variable. Opt for 'region' or 'subregion'. Also, it
+## seems that certain regions have significantly more subregions - the number of
+## unique subregions within a region ranges from 1 to 10. 
+
+unique(volcano$country)
+n_distinct(volcano$country)
+
+unique(volcano$region)
+n_distinct(volcano$region)
+
+unique(volcano$subregion)
+n_distinct(volcano$subregion)
+
+ddply(volcano, ~ region, summarize, num_subregions = length(unique(subregion)))
+
+## Decided to play around with names. Unsurprisingly, the most common first
+## letters of volcano names are  "S", "T", and "A". Among the least common first
+## letters are "X" (with zero) and "Q"... nothing to see here.
+
+alphabet.names <- as.data.frame(table(substring(volcano$volcano_name, 1, 1)))
+ggplot(alphabet.names, aes(x = Var1, y = Freq)) + geom_col()
+
+## Also, I'll need to change and clean some columns For instance, 'year' is a
+## character with many "Unknown" values. And 'tectonic_settings' can be split
+## into 'zone' and 'crust_details' by the "/" in each value.
+
+class(volcano$last_eruption_year)
+head(volcano$last_eruption_year, 7)
+
+head(volcano$tectonic_settings)
+
+head(volcano %>% 
+       select(major_rock_1, major_rock_2, major_rock_3, major_rock_4, major_rock_5,
+              minor_rock_1, minor_rock_2, minor_rock_3, minor_rock_4, minor_rock_5), 6)
+
+## Finally, 'major_rock_1' is the only column among the major and minor rock
+## variables that seems useful. Unless I'd like to count the number of each rock
+## type... I'd have to, again, use string functions to separate by "/".
+
+```
+
+```{r, eval = F}
+# Exploring "eruptions"
+
+eruptions
+skim(eruptions)
+
+## It seems like most eruptions don't last more than a year. There are a lot of
+## "NA" values, which is puzzling; many of these are "Uncertain" but I should
+## still opt to use 'start_year' when looking at time, maybe filtering outliers
+## like the few eruptions that lasted over two centuries.
+
+eruptions %>% 
+  mutate(duration = end_year - start_year) %>% 
+  count(duration) %>% 
+ ggplot(aes(x = duration, y = n)) + geom_point() + ylim(0, 3000)
+
+eruptions %>% 
+  mutate(duration = end_year - start_year) %>% 
+  filter(is.na(duration))
+tail(unique(eruptions$start_year))
+
+## The 'area_of_activity' variable doesn't seem useful. Most variables are seen
+## only once or twice, and each seems to be associated with a single volcano.
+## And, 'volcano_number' seems to be a better identification variable.
+
+as.data.frame(table(eruptions$area_of_activity)) %>% 
+  arrange(desc(Freq))
+
+eruptions %>% 
+  filter(area_of_activity == "Naka-dake")
+
+## I was interested in seeing the number of eruptions by an arbitrary 'era'
+## variable I made. If I'd rather use 'era' over 'start_year', I'll have to
+## search for a more scientific categorization; mine is based on 6000-, 3000-,
+## 500-, 250-, and 60-year intervals. Not ideal.
+
+eruptions %>% 
+     mutate(era = case_when(start_year >= -12000 & start_year < -6000 ~ "12000-6001 BCE",
+                       start_year >= -6000 & start_year < -3000 ~ "6000-3001 BCE",
+                       start_year >= -3000 & start_year < 0 ~ "3000-1 BCE",
+                       start_year >= 0 & start_year <=500 ~ "0-500 CE",
+                       start_year > 500 & start_year <= 1000 ~ "501-1000 CE",
+                       start_year > 1000 & start_year <= 1500 ~ "1001-1500 CE",
+                       start_year > 1500 & start_year <= 1750 ~ "1501-1750 CE",
+                       start_year > 1750 & start_year <= 1900 ~ "1751-1900 CE",
+                       start_year > 1900 & start_year <= 1960 ~ "1901-1960 CE",
+                       start_year > 1960 ~ "after 1960 CE",
+                       TRUE ~ "none")) %>% 
+     select(eruption_category, vei, era) %>%
+     group_by(era) %>% 
+     count(eruption_category) %>% 
+     ungroup() %>% 
+     mutate(era = factor(era, levels = c("12000-6001 BCE", "6000-3001 BCE", 
+                                         "3000-1 BCE", "0-500 CE", "501-1000 CE", 
+                                         "1001-1500 CE", "1501-1750 CE", 
+                                         "1751-1900 CE", "1901-1960 CE",
+                                         "after 1960 CE", "none"))) %>% 
+  ggplot(aes(x = era, y = n, fill = eruption_category)) + 
+     geom_bar(position = "dodge", stat = "identity") +
+     theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## I'm interested in using the 'vei' variable to examine the intensity of
+## eruptions, but 'vei' has many "NA" values. I noticed that these values are
+## most frequent with older eruptions, newer eruptions (2020 and 2019,
+## especially), and "Uncertain" eruptions.
+
+eruptions %>% group_by(start_year) %>%  
+     filter(is.na(vei)) %>%
+     select(eruption_category, vei, start_year) %>%
+     group_by(start_year) %>% 
+     count(eruption_category) %>% 
+     ungroup() %>% 
+  ggplot(aes(x = start_year, y = n, color = eruption_category)) + 
+     geom_point() +
+     theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+na.vals.year <- eruptions %>% group_by(start_year) %>%  
+     filter(is.na(vei)) %>% 
+     select(eruption_category, start_year, vei) %>% 
+     ungroup() %>% 
+     count(start_year) %>% 
+     rename("na.vals" = n)
+total.num.year <- eruptions %>%
+     select(eruption_category, start_year, vei) %>% 
+     count(start_year) %>% 
+     rename("total.vals" = n)
+
+total.num.year %>% left_join(na.vals.year, by = "start_year") %>% 
+  mutate(na.vals = replace_na(na.vals, 0)) %>% 
+  mutate(perc.na = na.vals / total.vals,
+         diff = total.vals - na.vals) %>% 
+  ggplot(aes(x = start_year, y = diff, color = perc.na)) + geom_point()
+
+total.num.year %>% left_join(na.vals.year, by = "start_year") %>% 
+  mutate(na.vals = replace_na(na.vals, 0)) %>% 
+  mutate(perc.na = na.vals / total.vals,
+         diff = total.vals - na.vals) %>% 
+  tail(50) %>% 
+  ggplot(aes(x = start_year, y = perc.na, fill = diff)) + geom_col()
+  
+## The 'evidence_method_dating' variable is interesting, but I can't see myself
+## needing that. Additionally, I'll may have to create a new variable with the
+## duration in days by using the 'lubridate' package; I'll move on for now.
+
+```
+
+```{r, eval = T}
+
+# Exploring "events"
+
+```
+
