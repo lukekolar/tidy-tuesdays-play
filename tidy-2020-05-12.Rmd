@@ -188,5 +188,35 @@ total.num.year %>% left_join(na.vals.year, by = "start_year") %>%
 
 # Exploring "events"
 
+events
+skim(events)
+
+##
+
+set.seed(10)
+samp <- sample_n(eruptions, 5)
+samp %>% arrange(eruption_number)
+
+events %>% 
+  filter(eruption_number %in% c(samp$eruption_number))
+
+## Event remarks only seem useful for examining outliers. Otherwise, most of the
+## remarks are missing in this dataset.
+
+unique(events$event_remarks) %>% tail()
+
+##
+
 ```
+
+
+
+
+
+
+
+
+
+
+
 
