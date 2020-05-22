@@ -191,7 +191,11 @@ total.num.year %>% left_join(na.vals.year, by = "start_year") %>%
 events
 skim(events)
 
-##
+## It appears that the "events" dataset provides information on volcanic events
+## including eruptions, and with many eruptions there are associated events of
+## lava flow, ash, earthquakes, etc. I'll probably only look at eruptions, but I
+## can reference this dataset to look at causes or effects of these eruptions.
+## Overall, though, it seems messy, and is missing more recent eruptions.
 
 set.seed(10)
 samp <- sample_n(eruptions, 5)
@@ -200,15 +204,52 @@ samp %>% arrange(eruption_number)
 events %>% 
   filter(eruption_number %in% c(samp$eruption_number))
 
+events %>% 
+  distinct(event_type)
+
 ## Event remarks only seem useful for examining outliers. Otherwise, most of the
 ## remarks are missing in this dataset.
 
 unique(events$event_remarks) %>% tail()
 
-##
+## In conclusion, I don't think it's necessary to join this with the "eruptions"
+## set, as it's disorganized and probably irrelevant for my purposes.
 
 ```
 
+```{r}
+# Exploring "tree_rings"
+
+tree_rings
+skim(tree_rings)
+
+## The dataset contains hundreds of rows missing all values. Removing these,
+## it's clear that it begins at year 1 CE.
+
+tree_rings.val <- tree_rings %>% 
+  filter(!is.na(year)) %>% 
+  arrange(desc(year))
+tree_rings.val %>% tail()
+
+## The 'n_tree' variable, as defined by the tidytuesday site, shows "Tree ring
+## z-scores relative to year = 1000-1099", which is an interesting way to
+## quantify the rings. I should keep in mind that the 11th century CE serves as
+## the statistical point of comparison if I include these years in my analysis.
+## Also, there seems to be a slight increase over the period after 1960, as
+## discussed in the "Nature" article reference in the tidytuesday README.
+
+ggplot(tree_rings.val, aes(x = year, y = n_tree)) + geom_point()
+ggplot(tree_rings.val %>% filter(year >= 1960), aes(x = year, y = n_tree)) + geom_point()
+
+## 
+
+ggplot(tree_rings.val, 
+       aes(x = year, y = europe_temp_index)) + geom_point()
+ggplot(tree_rings.val %>% filter(year >= 1960), 
+       aes(x = year, y = europe_temp_index)) + geom_point()
+
+
+```
 
 
 
